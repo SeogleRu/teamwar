@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Team War - TF2 в браузере</title>
+<style>
+    * {
+        margin: 0; padding: 0; box-sizing: border-box;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+        width: 100%; height: 100%;
+        overflow: hidden;
+        background: #0a0a0a;
+        font-family: 'Arial', sans-serif;
+        touch-action: none;
+    }
+    #game-container {
+        position: fixed;
+        inset: 0;
+        background: #3a4a3a;
+        overflow: hidden;
+    }
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: #4a6a4a;
+    }
+    #hud {
+        position: absolute;
+        top: 0; left: 0; width: 100%;
+        padding: 10px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        pointer-events: none;
+        color: white;
+        text-shadow: 2px 2px 0 #000;
+        font-weight: bold;
+        font-size: 16px;
+        letter-spacing: 1px;
+        z-index: 5;
+        gap: 8px;
+    }
+    .hud-left, .hud-right { display: flex; gap: 14px; align-items: center; }
+    .health { color: #ff6b6b; }
+    .score { color: #ffd93d; }
+    .kills { color: #7dd3fc; }
+    .ally-count { color: #a5f3a5; }
+    .ammo { color: #ffb86b; }
+    .team-tag {
+        font-size: 13px; opacity: 0.9; padding: 2px 10px;
+        border-radius: 20px; border: 2px solid currentColor; white-space: nowrap;
+    }
+
+    /* МГЕ брат индикатор */
+    #mge-indicator {
+        position: absolute;
+        top: 55px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 8px 24px;
+        border-radius: 30px;
+        background: linear-gradient(90deg, #ff0044, #ff8800, #ff0044);
+        background-size: 200% 100%;
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+        letter-spacing: 2px;
+        text-shadow: 2px 2px 4px #000;
+        border: 3px solid #ffd700;
+        box-shadow: 0 0 30px #ff4400, 0 0 60px #ff2200 inset;
+        z-index: 12;
+        display: none;
+        text-align: center;
+        pointer-events: none;
+        animation: mgePulse 0.6s ease-in-out infinite alternate;
+    }
+    #mge-indicator.active { display: block; }
+    #mge-timer {
+        display: inline-block;
+        background: rgba(0,0,0,0.5);
+        padding: 2px 10px;
+        border-radius: 12px;
+        margin-left: 8px;
+        font-size: 16px;
+        color: #ffd700;
+    }
+    @keyframes mgePulse {
+        0% { box-shadow: 0 0 25px #ff4400, 0 0 40px #ff2200 inset; transform: translateX(-50%) scale(1); }
+        100% { box-shadow: 0 0 50px #ff8800, 0 0 80px #ff4400 inset; transform: translateX(-50%) scale(1.04); }
+    }
+
+    .joystick-base {
+        position: absolute; width: 130px; height: 130px; border-radius: 50%;
+        background: rgba(255,255,255,0.07);
+        border: 2px solid rgba(255,255,255,0.22);
+        display: none; touch-action: none; z-index: 8;
+    }
+    #move-joystick { left: 20px; bottom: 20px; }
+    #aim-joystick {
+        right: 20px; bottom: 20px;
+        background: rgba(220,80,80,0.10);
+        border-color: rgba(255,140,140,0.30);
+    }
+    .joystick-knob {
+        position: absolute; width: 56px; height: 56px; border-radius: 50%;
+        background: rgba(255,255,255,0.45);
+        border: 2px solid rgba(255,255,255,0.7);
+        top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;
+    }
+    #aim-joystick .joystick-knob {
+        background: rgba(255,120,120,0.55);
+        border-color: rgba(255,180,180,0.8);
+    }
+    #aim-joystick::after {
+        content: '🎯'; position: absolute; top: -22px; left: 50%;
+        transform: translateX(-50%); font-size: 16px; opacity: 0.6;
+    }
+    #move-joystick::after {
+        content: '🕹️'; position: absolute; top: -22px; left: 50%;
+        transform: translateX(-50%); font-size: 16px; opacity: 0.6;
+    }
+
+    #fire-btn {
+        position: absolute; width: 90px; height: 90px; border-radius: 50%;
+        background: rgba(220, 50, 50, 0.55);
+        border: 3px solid rgba(255,255,255,0.65);
+        right: 165px; bottom: 40px;
+        display: none; justify-content: center; align-items: center;
+        color: white; font-weight: bold; font-size: 14px;
+        text-shadow: 1px 1px 0 #000; z-index: 9; touch-action: none;
+        letter-spacing: 1px;
+    }
+    #fire-btn:active { background: rgba(255, 70, 70, 0.9); transform: scale(0.94); }
+
+    #menu-overlay {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.9);
+        display: flex; flex-direction: column; justify-content: flex-start;
+        align-items: center; z-index: 20; padding: 14px 12px 24px;
+        overflow-y: auto; color: white;
+    }
+    #menu-overlay h1 {
+        font-size: 34px; letter-spacing: 3px; margin-bottom: 2px;
+        text-shadow: 3px 3px 0 #b00, -1px -1px 0 #06f; color: #ffd93d; flex-shrink: 0;
+    }
+    #menu-overlay .subtitle {
+        opacity: 0.65; margin-bottom: 14px; font-size: 12px;
+        letter-spacing: 3px; flex-shrink: 0;
+    }
+    .menu-section {
+        width: 100%; max-width: 720px; margin-bottom: 12px; flex-shrink: 0;
+    }
+    .menu-section h2 {
+        font-size: 14px; letter-spacing: 2px; margin-bottom: 8px;
+        opacity: 0.8; text-align: center; text-transform: uppercase;
+    }
+    .team-row { display: flex; gap: 12px; justify-content: center; }
+    .team-btn {
+        flex: 1; max-width: 220px; padding: 12px; border-radius: 10px;
+        border: 3px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.06); color: white;
+        font-size: 15px; font-weight: bold; cursor: pointer;
+        letter-spacing: 1px; transition: 0.15s;
+    }
+    .team-btn.red { border-color: #e63946; color: #ff8a95; }
+    .team-btn.blu { border-color: #3a86ff; color: #9ec0ff; }
+    .team-btn.selected.red { background: #e63946; color: #fff; box-shadow: 0 0 22px #e63946; }
+    .team-btn.selected.blu { background: #3a86ff; color: #fff; box-shadow: 0 0 22px #3a86ff; }
+
+    .class-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .class-btn {
+        padding: 8px 4px; border-radius: 10px;
+        border: 2px solid rgba(255,255,255,0.18);
+        background: rgba(255,255,255,0.05); color: white;
+        font-size: 12px; font-weight: bold; cursor: pointer;
+        text-align: center; transition: 0.12s; letter-spacing: 0.5px;
+        min-height: 76px;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    .class-btn .icon { font-size: 22px; margin-bottom: 2px; }
+    .class-btn .name { font-size: 11px; }
+    .class-btn .stats {
+        font-size: 9px; opacity: 0.65; margin-top: 2px;
+        letter-spacing: 0; line-height: 1.15;
+    }
+    .class-btn.selected {
+        background: #ffd93d; color: #111; border-color: #fff;
+        box-shadow: 0 0 18px #ffd93d;
+    }
+    .class-btn.selected .stats { opacity: 0.85; }
+    .class-btn.mge-blocked {
+        opacity: 0.35;
+        cursor: not-allowed;
+        position: relative;
+    }
+    .class-btn.mge-blocked::after {
+        content: '🚫 МГЕ';
+        position: absolute;
+        bottom: 3px;
+        font-size: 8px;
+        color: #ff4444;
+        font-weight: bold;
+    }
+
+    #play-btn {
+        margin-top: 6px; padding: 14px 60px; font-size: 20px;
+        letter-spacing: 3px; font-weight: bold; border-radius: 50px;
+        border: 3px solid #fff;
+        background: linear-gradient(180deg, #ffd93d, #f0a000);
+        color: #111; cursor: pointer;
+        box-shadow: 0 6px 0 #7a5200, 0 10px 22px rgba(0,0,0,0.6);
+        transition: 0.1s; flex-shrink: 0;
+    }
+    #play-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #7a5200; }
+    #play-btn:disabled {
+        opacity: 0.35; cursor: not-allowed;
+        box-shadow: 0 6px 0 #333; background: #666; color: #222;
+    }
+
+    #gameover-overlay {
+        position: absolute; inset: 0; background: rgba(0,0,0,0.8);
+        display: none; flex-direction: column; justify-content: center;
+        align-items: center; z-index: 15; color: white; text-align: center; padding: 20px;
+    }
+    #gameover-overlay h2 {
+        font-size: 42px; color: #e63946;
+        text-shadow: 3px 3px 0 #000; letter-spacing: 4px;
+    }
+    #gameover-overlay p { font-size: 20px; margin: 8px 0; color: #ffd93d; }
+    #gameover-overlay p.kills { color: #7dd3fc; margin-bottom: 20px; }
+    #retry-btn {
+        padding: 13px 44px; font-size: 18px; font-weight: bold;
+        letter-spacing: 2px; border-radius: 50px; border: 3px solid #fff;
+        background: linear-gradient(180deg, #ffd93d, #f0a000);
+        color: #111; cursor: pointer; box-shadow: 0 5px 0 #7a5200;
+    }
+    #retry-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #7a5200; }
+
+    .controls-hint {
+        position: absolute; bottom: 2px; left: 0; width: 100%;
+        text-align: center; color: rgba(255,255,255,0.3);
+        font-size: 10px; pointer-events: none; z-index: 4;
+    }
+
+    @media (max-height: 620px) {
+        #menu-overlay h1 { font-size: 24px; }
+        .class-btn { min-height: 62px; padding: 5px 3px; }
+        .class-btn .icon { font-size: 17px; }
+        .class-btn .name { font-size: 10px; }
+        .class-btn .stats { font-size: 8px; }
+        .menu-section { margin-bottom: 8px; }
+        #play-btn { padding: 11px 44px; font-size: 17px; }
+    }
+</style>
+</head>
+<body>
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud">
+        <div class="hud-left">
+            <div class="health">❤️ <span id="healthValue">100</span></div>
+            <div class="kills">💀 <span id="killsValue">0</span></div>
+            <div class="ally-count">🤝 <span id="allyValue">0</span></div>
+        </div>
+        <div class="team-tag" id="teamTag">BLU</div>
+        <div class="hud-right">
+            <div class="ammo">🔫 <span id="ammoValue">∞</span></div>
+            <div class="score">🎯 <span id="scoreValue">0</span></div>
+        </div>
+    </div>
+
+    <div id="mge-indicator">
+        ⚡ МГЕ БРАТ ⚡<span id="mge-timer">30</span>
+    </div>
+
+    <div class="joystick-base" id="move-joystick">
+        <div class="joystick-knob" id="move-knob"></div>
+    </div>
+    <div class="joystick-base" id="aim-joystick">
+        <div class="joystick-knob" id="aim-knob"></div>
+    </div>
+    <div id="fire-btn">ОГОНЬ</div>
+
+    <div class="controls-hint" id="hintText">
+        WASD/стрелки — движение • Мышь — прицел • ЛКМ/Пробел — выстрел
+    </div>
+
+    <div id="menu-overlay">
+        <h1>TEAM WAR</h1>
+        <div class="subtitle">TEAM FORTRESS 2 В БРАУЗЕРЕ</div>
+
+        <div class="menu-section">
+            <h2>Команда</h2>
+            <div class="team-row">
+                <button class="team-btn red" data-team="RED">🔴 RED</button>
+                <button class="team-btn blu selected" data-team="BLU">🔵 BLU</button>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h2>Класс (9) — МГЕ недоступен для разведчика</h2>
+            <div class="class-row" id="classRow"></div>
+        </div>
+
+        <button id="play-btn" disabled>В БОЙ</button>
+    </div>
+
+    <div id="gameover-overlay">
+        <h2>ПОРАЖЕНИЕ</h2>
+        <p>Очки: <span id="finalScore">0</span></p>
+        <p class="kills">Убийств: <span id="finalKills">0</span></p>
+        <button id="retry-btn">В МЕНЮ</button>
+    </div>
+</div>
+
+<script>
+(function() {
+    const container = document.getElementById('game-container');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const healthSpan = document.getElementById('healthValue');
+    const scoreSpan = document.getElementById('scoreValue');
+    const killsSpan = document.getElementById('killsValue');
+    const allySpan = document.getElementById('allyValue');
+    const ammoSpan = document.getElementById('ammoValue');
+    const teamTag = document.getElementById('teamTag');
+    const menuOverlay = document.getElementById('menu-overlay');
+    const gameoverOverlay = document.getElementById('gameover-overlay');
+    const finalScoreSpan = document.getElementById('finalScore');
+    const finalKillsSpan = document.getElementById('finalKills');
+    const playBtn = document.getElementById('play-btn');
+    const retryBtn = document.getElementById('retry-btn');
+    const moveJoystick = document.getElementById('move-joystick');
+    const moveKnob = document.getElementById('move-knob');
+    const aimJoystick = document.getElementById('aim-joystick');
+    const aimKnob = document.getElementById('aim-knob');
+    const fireBtn = document.getElementById('fire-btn');
+    const hintText = document.getElementById('hintText');
+    const classRow = document.getElementById('classRow');
+    const mgeIndicator = document.getElementById('mge-indicator');
+    const mgeTimerSpan = document.getElementById('mge-timer');
+
+    let GAME_WIDTH = 900;
+    let GAME_HEIGHT = 600;
+    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+    // ============================================================
+    // НАСТРОЙКИ МГЕ
+    // ============================================================
+    const MGE_KILL_THRESHOLD = 20;   // через сколько убийств активируется
+    const MGE_DURATION = 30000;       // 30 секунд
+    const MGE_DAMAGE_REDUCTION = 0.05; // почти неуязвим (5% урона проходит)
+
+    const CLASSES = {
+        scout:    { name:'Разведчик',   icon:'🏃', speed:3.8, maxHealth:95,  damage:18, fireCooldown:140, bulletSpeed:10, bulletSize:4, radius:19, bulletsPerShot:1, spread:0.06,  stats:'Быстрый · Слабый', weapon:'scattergun' },
+        soldier:  { name:'Солдат',      icon:'🚀', speed:2.5, maxHealth:145, damage:30, fireCooldown:380, bulletSpeed:7,  bulletSize:7, radius:23, bulletsPerShot:1, spread:0.04,  stats:'Урон+ · Ракеты', weapon:'rocket' },
+        pyro:     { name:'Поджигатель', icon:'🔥', speed:2.9, maxHealth:130, damage:9,  fireCooldown:60,  bulletSpeed:6,  bulletSize:8, radius:22, bulletsPerShot:2, spread:0.22,  stats:'Огонь · Дым', weapon:'flamethrower' },
+        demoman:  { name:'Подрывник',   icon:'💣', speed:2.7, maxHealth:140, damage:24, fireCooldown:320, bulletSpeed:6.5,bulletSize:8, radius:23, bulletsPerShot:1, spread:0.08,  stats:'Взрывы · Ловушки', weapon:'grenade' },
+        heavy:    { name:'Пулемётчик',  icon:'🛡️', speed:1.8, maxHealth:200, damage:14, fireCooldown:100, bulletSpeed:8.5,bulletSize:5, radius:28, bulletsPerShot:1, spread:0.10,  stats:'Танк · Урон', weapon:'minigun' },
+        engineer: { name:'Инженер',     icon:'🔧', speed:2.6, maxHealth:125, damage:16, fireCooldown:200, bulletSpeed:8,  bulletSize:5, radius:21, bulletsPerShot:2, spread:0.12,  stats:'Турели · Ящики', weapon:'shotgun' },
+        medic:    { name:'Медик',       icon:'💉', speed:3.0, maxHealth:110, damage:12, fireCooldown:200, bulletSpeed:9,  bulletSize:4, radius:20, bulletsPerShot:1, spread:0.05,  stats:'Лечение · Ускорение', weapon:'syringe' },
+        sniper:   { name:'Снайпер',     icon:'🎯', speed:2.6, maxHealth:100, damage:70, fireCooldown:900, bulletSpeed:14, bulletSize:5, radius:20, bulletsPerShot:1, spread:0.005, stats:'Дальний · Точный', weapon:'sniper' },
+        spy:      { name:'Шпион',       icon:'🕵️', speed:3.4, maxHealth:105, damage:45, fireCooldown:320, bulletSpeed:10, bulletSize:4, radius:20, bulletsPerShot:1, spread:0.02,  stats:'Стелс · Засады', weapon:'revolver' }
+    };
+
+    let selectedTeam = 'BLU';
+    let selectedClass = 'scout';
+
+    let gameState = 'menu';
+    let score = 0;
+    let kills = 0;
+    let playerHealth = 100;
+    let maxHealth = 100;
+
+    // ============================================================
+    // СОСТОЯНИЕ МГЕ
+    // ============================================================
+    let mgeActive = false;
+    let mgeStartTime = 0;
+    let mgeEndTime = 0;
+    let mgeTriggered = false; // сработал ли уже в этой игре (один раз за игру)
+
+    const TEAM_COLORS = {
+        RED: { body: '#c1272d', accent: '#7a1116', eye: '#ffe5e5', glow: '#ff5566', cloth:'#8b1a1f', hat:'#5a0d11' },
+        BLU: { body: '#2c5fa8', accent: '#152d5c', eye: '#e5f0ff', glow: '#6699ff', cloth:'#1e4178', hat:'#0f2244' }
+    };
+
+    const player = {
+        x: 0, y: 0,
+        radius: 20, speed: 3,
+        invulnerable: false,
+        invulnTimer: 0,
+        angle: 0,
+        walkCycle: 0,
+        recoil: 0
+    };
+
+    let playerTeam = 'BLU';
+    let enemyTeam = 'RED';
+
+    let allies = [];
+    let enemies = [];
+
+    const ALLY_RADIUS = 22;
+    const ENEMY_RADIUS = 22;
+    const ALLY_SPEED = 1.5;
+    const ENEMY_SPEED = 1.3;
+
+    const ALLY_MAX_HP = 100;
+    const MAX_ALLIES = 5;
+    const MAX_ENEMIES = 9;
+
+    const SPAWN_RATE_ENEMY = 1000;
+    const SPAWN_RATE_ALLY = 2500;
+
+    let lastSpawnEnemy = 0;
+    let lastSpawnAlly = 0;
+
+    let bullets = [];
+    let particles = [];
+
+    const ENEMY_BULLET_DAMAGE = 16;
+    const ALLY_BULLET_DAMAGE = 14;
+
+    const keys = { w:false, a:false, s:false, d:false, up:false, down:false, left:false, right:false };
+    let mouseX = 0, mouseY = 0;
+    let mouseDown = false;
+    let aimX = 0, aimY = 0;
+
+    let moveJoyActive = false;
+    let moveJoyStartX = 0, moveJoyStartY = 0;
+    let moveJoyVecX = 0, moveJoyVecY = 0;
+    const MOVE_JOY_RADIUS = 58;
+
+    let aimJoyActive = false;
+    let aimJoyStartX = 0, aimJoyStartY = 0;
+    let aimJoyVecX = 1, aimJoyVecY = 0;
+    let aimJoyAngle = 0;
+    const AIM_JOY_RADIUS = 58;
+    let autoAimTarget = null;
+
+    let fireBtnPressed = false;
+    let lastTimestamp = 0;
+
+    function resizeCanvas() {
+        GAME_WIDTH = container.clientWidth;
+        GAME_HEIGHT = container.clientHeight;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
+
+    function buildClassButtons() {
+        classRow.innerHTML = '';
+        Object.keys(CLASSES).forEach(key => {
+            const c = CLASSES[key];
+            const btn = document.createElement('button');
+            const isScout = key === 'scout';
+            btn.className = 'class-btn' + (key === selectedClass ? ' selected' : '') + (isScout ? ' mge-blocked' : '');
+            btn.dataset.class = key;
+            btn.innerHTML = `
+                <span class="icon">${c.icon}</span>
+                <span class="name">${c.name}</span>
+                <div class="stats">${isScout ? 'Без МГЕ' : c.stats}</div>
+            `;
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                selectedClass = key;
+            });
+            classRow.appendChild(btn);
+        });
+    }
+
+    document.querySelectorAll('.team-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.team-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedTeam = btn.dataset.team;
+        });
+    });
+
+    setTimeout(() => { playBtn.disabled = false; }, 300);
+    playBtn.addEventListener('click', () => { if (!playBtn.disabled) startGame(); });
+    retryBtn.addEventListener('click', () => {
+        gameoverOverlay.style.display = 'none';
+        menuOverlay.style.display = 'flex';
+        gameState = 'menu';
+    });
+
+    function startGame() {
+        resizeCanvas();
+        const cls = CLASSES[selectedClass];
+        maxHealth = cls.maxHealth;
+        playerHealth = maxHealth;
+        player.radius = cls.radius;
+        player.speed = cls.speed;
+        player.x = GAME_WIDTH / 2;
+        player.y = GAME_HEIGHT / 2;
+        player.invulnerable = false;
+        player.invulnTimer = 0;
+        player.angle = 0;
+        player.walkCycle = 0;
+        player.recoil = 0;
+
+        playerTeam = selectedTeam;
+        enemyTeam = selectedTeam === 'RED' ? 'BLU' : 'RED';
+
+        score = 0; kills = 0;
+        allies = []; enemies = []; bullets = []; particles = [];
+        lastSpawnEnemy = performance.now();
+        lastSpawnAlly = performance.now() - 1500;
+
+        // Сброс МГЕ
+        mgeActive = false;
+        mgeTriggered = false;
+        mgeStartTime = 0;
+        mgeEndTime = 0;
+        mgeIndicator.classList.remove('active');
+
+        teamTag.textContent = selectedTeam;
+        teamTag.style.color = TEAM_COLORS[selectedTeam].body;
+        updateHUD();
+
+        moveJoyVecX = 0; moveJoyVecY = 0;
+        moveKnob.style.transform = 'translate(-50%, -50%)';
+        aimJoyVecX = 1; aimJoyVecY = 0;
+        aimJoyAngle = 0;
+        aimKnob.style.transform = 'translate(-50%, -50%)';
+
+        aimX = GAME_WIDTH / 2; aimY = GAME_HEIGHT / 2;
+
+        if (isTouchDevice) {
+            moveJoystick.style.display = 'block';
+            aimJoystick.style.display = 'block';
+            fireBtn.style.display = 'flex';
+            hintText.textContent = 'Левый джойстик — движение • Правый — прицел • ОГОНЬ — выстрел';
+        } else {
+            moveJoystick.style.display = 'none';
+            aimJoystick.style.display = 'none';
+            fireBtn.style.display = 'none';
+            hintText.textContent = 'WASD/стрелки — движение • Мышь — прицел • ЛКМ/Пробел — выстрел';
+        }
+
+        menuOverlay.style.display = 'none';
+        gameState = 'playing';
+        spawnAlly();
+    }
+
+    function updateHUD() {
+        healthSpan.textContent = Math.max(0, Math.floor(playerHealth));
+        scoreSpan.textContent = score;
+        killsSpan.textContent = kills;
+        allySpan.textContent = allies.length;
+        ammoSpan.textContent = '∞';
+    }
+
+    // ============================================================
+    // МГЕ БРАТ — активация
+    // ============================================================
+    function activateMge() {
+        mgeActive = true;
+        mgeStartTime = performance.now();
+        mgeEndTime = mgeStartTime + MGE_DURATION;
+        mgeIndicator.classList.add('active');
+
+        // Эффект вспышки
+        for (let i = 0; i < 60; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 4 + Math.random() * 8;
+            particles.push({
+                x: player.x,
+                y: player.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 40 + Math.random() * 20,
+                maxLife: 60,
+                color: ['#ff0044', '#ff8800', '#ffd700', '#ff44ff'][Math.floor(Math.random()*4)],
+                size: 4 + Math.random() * 5,
+                noFade: true
+            });
+        }
+    }
+
+    function deactivateMge() {
+        mgeActive = false;
+        mgeIndicator.classList.remove('active');
+    }
+
+    // ============================================================
+    // ПРОВЕРКА МГЕ (вызывается при каждом убийстве)
+    // ============================================================
+    function checkMgeActivation() {
+        // Активируется только если выбран НЕ разведчик
+        if (selectedClass === 'scout') return;
+        if (mgeTriggered) return;
+        if (kills >= MGE_KILL_THRESHOLD) {
+            mgeTriggered = true;
+            activateMge();
+        }
+    }
+
+    // ============================================================
+    // УРОН ПО ИГРОКУ (с учётом МГЕ)
+    // ============================================================
+    function damagePlayer(amount) {
+        if (mgeActive) {
+            // Пулемётчик — полная неуязвимость
+            if (selectedClass === 'heavy') {
+                return; // вообще никакого урона
+            }
+            // Остальные классы — почти неуязвимы (5% урона)
+            amount *= MGE_DAMAGE_REDUCTION;
+        }
+        playerHealth -= amount;
+        player.invulnerable = true;
+        player.invulnTimer = mgeActive ? 200 : 600;
+        updateHUD();
+        if (playerHealth <= 0) { playerHealth = 0; endGame(); }
+    }
+
+    function spawnEnemy() {
+        if (enemies.length >= MAX_ENEMIES || gameState !== 'playing') return;
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        const padding = 60;
+        if (side === 0) { x = Math.random() * GAME_WIDTH; y = -padding; }
+        else if (side === 1) { x = GAME_WIDTH + padding; y = Math.random() * GAME_HEIGHT; }
+        else if (side === 2) { x = Math.random() * GAME_WIDTH; y = GAME_HEIGHT + padding; }
+        else { x = -padding; y = Math.random() * GAME_HEIGHT; }
+
+        const classKeys = Object.keys(CLASSES);
+        const enemyClass = classKeys[Math.floor(Math.random() * classKeys.length)];
+
+        enemies.push({
+            x, y,
+            radius: CLASSES[enemyClass].radius,
+            speed: ENEMY_SPEED,
+            speedVar: 0.8 + Math.random() * 0.7,
+            shootCd: 800 + Math.random() * 900,
+            lastShot: performance.now(),
+            hp: 100, maxHp: 100,
+            classKey: enemyClass,
+            icon: CLASSES[enemyClass].icon,
+            target: null,
+            retargetCd: 0,
+            walkCycle: Math.random() * 10,
+            angle: 0,
+            recoil: 0
+        });
+    }
+
+    function spawnAlly() {
+        if (allies.length >= MAX_ALLIES || gameState !== 'playing') return;
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        const padding = 50;
+        if (side === 0) { x = Math.random() * GAME_WIDTH; y = -padding; }
+        else if (side === 1) { x = GAME_WIDTH + padding; y = Math.random() * GAME_HEIGHT; }
+        else if (side === 2) { x = Math.random() * GAME_WIDTH; y = GAME_HEIGHT + padding; }
+        else { x = -padding; y = Math.random() * GAME_HEIGHT; }
+
+        const classKeys = Object.keys(CLASSES);
+        const allyClass = classKeys[Math.floor(Math.random() * classKeys.length)];
+
+        allies.push({
+            x, y,
+            radius: CLASSES[allyClass].radius,
+            speed: ALLY_SPEED,
+            speedVar: 0.9 + Math.random() * 0.6,
+            shootCd: 900 + Math.random() * 800,
+            lastShot: performance.now(),
+            hp: ALLY_MAX_HP, maxHp: ALLY_MAX_HP,
+            classKey: allyClass,
+            icon: CLASSES[allyClass].icon,
+            target: null,
+            retargetCd: 0,
+            walkCycle: Math.random() * 10,
+            angle: 0,
+            recoil: 0
+        });
+        updateHUD();
+    }
+
+    function spawnHitParticles(x, y, color, count = 5) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 3;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 20 + Math.random() * 15,
+                maxLife: 35,
+                color, size: 2 + Math.random() * 3
+            });
+        }
+    }
+
+    function spawnMuzzleFlash(x, y, angle, color) {
+        for (let i = 0; i < 4; i++) {
+            const a = angle + (Math.random() - 0.5) * 0.6;
+            const speed = 3 + Math.random() * 4;
+            particles.push({
+                x, y,
+                vx: Math.cos(a) * speed,
+                vy: Math.sin(a) * speed,
+                life: 8 + Math.random() * 6,
+                maxLife: 14,
+                color: '#ffcc55',
+                size: 3 + Math.random() * 3
+            });
+        }
+    }
+
+    function spawnShellCasing(x, y, angle, color) {
+        const ejectAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        particles.push({
+            x, y,
+            vx: Math.cos(ejectAngle) * (1.5 + Math.random() * 1.5),
+            vy: Math.sin(ejectAngle) * (1.5 + Math.random() * 1.5) - 1,
+            life: 40, maxLife: 40,
+            color: color, size: 2.5,
+            gravity: 0.15
+        });
+    }
+
+    function spawnBloodParticles(x, y, color) {
+        for (let i = 0; i < 6; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1.5 + Math.random() * 2.5;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 25 + Math.random() * 15,
+                maxLife: 40,
+                color: color,
+                size: 2 + Math.random() * 3
+            });
+        }
+    }
+
+    function shootPlayerBullet() {
+        if (gameState !== 'playing') return;
+        const cls = CLASSES[selectedClass];
+        const now = performance.now();
+        if (now - (player._lastShot || 0) < cls.fireCooldown) return;
+        player._lastShot = now;
+        player.recoil = 1;
+
+        let angle;
+        if (aimJoyActive) angle = aimJoyAngle;
+        else if (isTouchDevice && autoAimTarget) angle = Math.atan2(autoAimTarget.y - player.y, autoAimTarget.x - player.x);
+        else angle = Math.atan2(aimY - player.y, aimX - player.x);
+
+        const weapon = cls.weapon;
+        // В МГЕ урон игрока усиливается в 3 раза (кроме пулемётчика — там 2x)
+        const mgeDamageBonus = mgeActive ? (selectedClass === 'heavy' ? 2 : 3) : 1;
+
+        if (weapon === 'flamethrower') {
+            for (let i = 0; i < 6; i++) {
+                const a = angle + (Math.random() - 0.5) * 0.35;
+                bullets.push({
+                    x: player.x + Math.cos(a) * (player.radius + 6),
+                    y: player.y + Math.sin(a) * (player.radius + 6),
+                    vx: Math.cos(a) * (5 + Math.random() * 3),
+                    vy: Math.sin(a) * (5 + Math.random() * 3),
+                    radius: 5 + Math.random() * 4,
+                    color: Math.random() < 0.5 ? (mgeActive ? '#ff22ff' : '#ff8833') : (mgeActive ? '#ff00aa' : '#ffaa22'),
+                    fromPlayer: true, fromAlly: false,
+                    life: 15 + Math.random() * 10,
+                    damage: cls.damage * mgeDamageBonus,
+                    isFire: true
+                });
+            }
+            spawnMuzzleFlash(player.x + Math.cos(angle) * (player.radius + 10),
+                            player.y + Math.sin(angle) * (player.radius + 10),
+                            angle, '#ff8833');
+        } else if (weapon === 'minigun') {
+            const a = angle + (Math.random() - 0.5) * cls.spread;
+            bullets.push({
+                x: player.x + Math.cos(a) * (player.radius + 8),
+                y: player.y + Math.sin(a) * (player.radius + 8),
+                vx: Math.cos(a) * cls.bulletSpeed,
+                vy: Math.sin(a) * cls.bulletSpeed,
+                radius: cls.bulletSize,
+                color: mgeActive ? '#ff44ff' : '#ffee77',
+                fromPlayer: true, fromAlly: false,
+                life: 100,
+                damage: cls.damage * mgeDamageBonus,
+                tracer: true
+            });
+            spawnMuzzleFlash(player.x + Math.cos(angle) * (player.radius + 10),
+                            player.y + Math.sin(angle) * (player.radius + 10),
+                            angle, '#ffcc55');
+            spawnShellCasing(player.x, player.y, angle, '#d4a017');
+        } else if (weapon === 'rocket' || weapon === 'grenade') {
+            bullets.push({
+                x: player.x + Math.cos(angle) * (player.radius + 10),
+                y: player.y + Math.sin(angle) * (player.radius + 10),
+                vx: Math.cos(angle) * cls.bulletSpeed,
+                vy: Math.sin(angle) * cls.bulletSpeed,
+                radius: cls.bulletSize + 2,
+                color: mgeActive ? '#ff00aa' : (weapon === 'rocket' ? '#dd4444' : '#556633'),
+                fromPlayer: true, fromAlly: false,
+                life: 120,
+                damage: cls.damage * mgeDamageBonus,
+                isRocket: true,
+                trail: 0
+            });
+            spawnMuzzleFlash(player.x + Math.cos(angle) * (player.radius + 15),
+                            player.y + Math.sin(angle) * (player.radius + 15),
+                            angle, '#ff8833');
+        } else if (weapon === 'sniper') {
+            bullets.push({
+                x: player.x + Math.cos(angle) * (player.radius + 15),
+                y: player.y + Math.sin(angle) * (player.radius + 15),
+                vx: Math.cos(angle) * cls.bulletSpeed,
+                vy: Math.sin(angle) * cls.bulletSpeed,
+                radius: cls.bulletSize,
+                color: mgeActive ? '#ff00aa' : '#ffff88',
+                fromPlayer: true, fromAlly: false,
+                life: 100,
+                damage: cls.damage * mgeDamageBonus,
+                tracer: true,
+                tracerLong: true
+            });
+            spawnMuzzleFlash(player.x + Math.cos(angle) * (player.radius + 15),
+                            player.y + Math.sin(angle) * (player.radius + 15),
+                            angle, '#ffcc55');
+            spawnShellCasing(player.x, player.y, angle, '#d4a017');
+        } else if (weapon === 'shotgun' || weapon === 'scattergun') {
+            for (let i = 0; i < cls.bulletsPerShot; i++) {
+                const a = angle + (Math.random() - 0.5) * cls.spread * 2;
+                bullets.push({
+                    x: player.x + Math.cos(a) * (player.radius + 8),
+                    y: player.y + Math.sin(a) * (player.radius + 8),
+                    vx: Math.cos(a) * cls.bulletSpeed,
+                    vy: Math.sin(a) * cls.bulletSpeed,
+                    radius: cls.bulletSize,
+                    color: mgeActive ? '#ff44ff' : '#ffee88',
+                    fromPlayer: true, fromAlly: false,
+                    life: 100,
+                    damage: cls.damage * mgeDamageBonus
+                });
+            }
+            spawnMuzzleFlash(player.x + Math.cos(angle) * (player.radius + 10),
+                            player.y + Math.sin(angle) * (player.radius + 10),
+                            angle, '#ffcc55');
+            spawnShellCasing(player.x, player.y, angle, '#c0392b');
+        } else {
+            bullets.push({
+                x: player.x + Math.cos(angle) * (player.radius + 8),
+                y: player.y + Math.sin(angle) * (player.radius + 8),
+                vx: Math.cos(angle) * cls.bulletSpeed,
+                vy: Math.sin(angle) * cls.bulletSpeed,
+                radius: cls.bulletSize,
+                color: mgeActive ? '#ff44ff' : '#ffee77',
+                fromPlayer: true, fromAlly: false,
+                life: 100,
+                damage: cls.damage * mgeDamageBonus
+            });
+            spawnMuzzleFlash(player.x + Math.cos(angle) * (player.radius + 10),
+                            player.y + Math.sin(angle) * (player.radius + 10),
+                            angle, '#ffcc55');
+            spawnShellCasing(player.x, player.y, angle, '#d4a017');
+        }
+    }
+
+    function shootEnemyBullet(enemy) {
+        if (gameState !== 'playing') return;
+        const t = enemy.target;
+        if (!t) return;
+        const angle = Math.atan2(t.y - enemy.y, t.x - enemy.x);
+        const cls = CLASSES[enemy.classKey];
+        const weapon = cls.weapon;
+        enemy.recoil = 1;
+
+        if (weapon === 'flamethrower') {
+            for (let i = 0; i < 4; i++) {
+                const a = angle + (Math.random() - 0.5) * 0.35;
+                bullets.push({
+                    x: enemy.x + Math.cos(a) * (enemy.radius + 6),
+                    y: enemy.y + Math.sin(a) * (enemy.radius + 6),
+                    vx: Math.cos(a) * (4 + Math.random() * 2),
+                    vy: Math.sin(a) * (4 + Math.random() * 2),
+                    radius: 5 + Math.random() * 3,
+                    color: Math.random() < 0.5 ? '#ff8833' : '#ffaa22',
+                    fromPlayer: false, fromAlly: false,
+                    life: 14 + Math.random() * 8,
+                    damage: ENEMY_BULLET_DAMAGE * 0.5,
+                    isFire: true
+                });
+            }
+        } else {
+            const spread = (Math.random() - 0.5) * 0.15;
+            bullets.push({
+                x: enemy.x + Math.cos(angle) * (enemy.radius + 8),
+                y: enemy.y + Math.sin(angle) * (enemy.radius + 8),
+                vx: Math.cos(angle + spread) * (weapon === 'sniper' ? 12 : 5.5),
+                vy: Math.sin(angle + spread) * (weapon === 'sniper' ? 12 : 5.5),
+                radius: weapon === 'rocket' || weapon === 'grenade' ? 7 : 5,
+                color: TEAM_COLORS[enemyTeam].glow,
+                fromPlayer: false, fromAlly: false,
+                life: 110,
+                damage: ENEMY_BULLET_DAMAGE,
+                tracer: weapon === 'sniper'
+            });
+        }
+        spawnMuzzleFlash(enemy.x + Math.cos(angle) * (enemy.radius + 10),
+                        enemy.y + Math.sin(angle) * (enemy.radius + 10),
+                        angle, '#ffcc55');
+    }
+
+    function shootAllyBullet(ally) {
+        if (gameState !== 'playing') return;
+        const t = ally.target;
+        if (!t) return;
+        const angle = Math.atan2(t.y - ally.y, t.x - ally.x);
+        const cls = CLASSES[ally.classKey];
+        const weapon = cls.weapon;
+        ally.recoil = 1;
+
+        if (weapon === 'flamethrower') {
+            for (let i = 0; i < 4; i++) {
+                const a = angle + (Math.random() - 0.5) * 0.35;
+                bullets.push({
+                    x: ally.x + Math.cos(a) * (ally.radius + 6),
+                    y: ally.y + Math.sin(a) * (ally.radius + 6),
+                    vx: Math.cos(a) * (4 + Math.random() * 2),
+                    vy: Math.sin(a) * (4 + Math.random() * 2),
+                    radius: 5 + Math.random() * 3,
+                    color: Math.random() < 0.5 ? '#ff8833' : '#ffaa22',
+                    fromPlayer: false, fromAlly: true,
+                    life: 14 + Math.random() * 8,
+                    damage: ALLY_BULLET_DAMAGE * 0.5,
+                    isFire: true
+                });
+            }
+        } else {
+            const spread = (Math.random() - 0.5) * 0.12;
+            bullets.push({
+                x: ally.x + Math.cos(angle) * (ally.radius + 8),
+                y: ally.y + Math.sin(angle) * (ally.radius + 8),
+                vx: Math.cos(angle + spread) * 6,
+                vy: Math.sin(angle + spread) * 6,
+                radius: 5,
+                color: TEAM_COLORS[playerTeam].glow,
+                fromPlayer: false, fromAlly: true,
+                life: 100,
+                damage: ALLY_BULLET_DAMAGE
+            });
+        }
+        spawnMuzzleFlash(ally.x + Math.cos(angle) * (ally.radius + 10),
+                        ally.y + Math.sin(angle) * (ally.radius + 10),
+                        angle, '#ffcc55');
+    }
+
+    function findNearestEnemy(x, y, maxDist) {
+        let best = null, bestDist = maxDist;
+        for (const e of enemies) {
+            const d = Math.hypot(e.x - x, e.y - y);
+            if (d < bestDist) { bestDist = d; best = e; }
+        }
+        return best;
+    }
+
+    function update(dt) {
+        if (gameState !== 'playing') return;
+
+        const cls = CLASSES[selectedClass];
+        const now = performance.now();
+        const dtFactor = dt / 16.67;
+
+        // --- МГЕ таймер ---
+        if (mgeActive) {
+            const remaining = mgeEndTime - now;
+            if (remaining <= 0) {
+                deactivateMge();
+            } else {
+                mgeTimerSpan.textContent = Math.ceil(remaining / 1000);
+            }
+        }
+
+        // Движение игрока
+        let dx = 0, dy = 0;
+        if (isTouchDevice && moveJoyActive) { dx = moveJoyVecX; dy = moveJoyVecY; }
+        else {
+            if (keys.w || keys.up) dy -= 1;
+            if (keys.s || keys.down) dy += 1;
+            if (keys.a || keys.left) dx -= 1;
+            if (keys.d || keys.right) dx += 1;
+        }
+
+        const mag = Math.hypot(dx, dy);
+        if (mag > 0.01) {
+            if (mag > 1) { dx /= mag; dy /= mag; }
+            // В МГЕ игрок ещё быстрее
+            const speedMul = mgeActive ? 1.4 : 1;
+            player.x += dx * player.speed * speedMul * dtFactor;
+            player.y += dy * player.speed * speedMul * dtFactor;
+            player.walkCycle += dt * 0.02;
+        }
+        player.x = Math.max(player.radius, Math.min(GAME_WIDTH - player.radius, player.x));
+        player.y = Math.max(player.radius, Math.min(GAME_HEIGHT - player.radius, player.y));
+
+        if (aimJoyActive) player.angle = aimJoyAngle;
+        else if (!isTouchDevice) {
+            aimX = mouseX; aimY = mouseY;
+            player.angle = Math.atan2(aimY - player.y, aimX - player.x);
+        } else {
+            autoAimTarget = findNearestEnemy(player.x, player.y, 420);
+            if (autoAimTarget) {
+                const autoAngle = Math.atan2(autoAimTarget.y - player.y, autoAimTarget.x - player.x);
+                let diff = autoAngle - player.angle;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                player.angle += diff * 0.15;
+            }
+        }
+
+        if (player.recoil > 0) player.recoil -= dt * 0.008;
+        if (player.recoil < 0) player.recoil = 0;
+
+        if (player.invulnerable) {
+            player.invulnTimer -= dt;
+            if (player.invulnTimer <= 0) player.invulnerable = false;
+        }
+
+        if (now - lastSpawnEnemy > SPAWN_RATE_ENEMY && enemies.length < MAX_ENEMIES) {
+            spawnEnemy(); lastSpawnEnemy = now;
+        }
+        if (now - lastSpawnAlly > SPAWN_RATE_ALLY && allies.length < MAX_ALLIES) {
+            spawnAlly(); lastSpawnAlly = now;
+        }
+
+        // --- Союзники ---
+        for (let i = allies.length - 1; i >= 0; i--) {
+            const a = allies[i];
+            if (now > a.retargetCd) {
+                a.target = findNearestEnemy(a.x, a.y, 500);
+                a.retargetCd = now + 1500;
+            }
+            if (a.target && enemies.includes(a.target)) {
+                const distToTarget = Math.hypot(a.target.x - a.x, a.target.y - a.y);
+                const desiredDist = 200;
+                const angleToTarget = Math.atan2(a.target.y - a.y, a.target.x - a.x);
+                a.angle = angleToTarget;
+                if (distToTarget > desiredDist) {
+                    a.x += Math.cos(angleToTarget) * a.speed * a.speedVar * dtFactor;
+                    a.y += Math.sin(angleToTarget) * a.speed * a.speedVar * dtFactor;
+                    a.walkCycle += dt * 0.015;
+                } else if (distToTarget < desiredDist - 50) {
+                    a.x -= Math.cos(angleToTarget) * a.speed * 0.5 * dtFactor;
+                    a.y -= Math.sin(angleToTarget) * a.speed * 0.5 * dtFactor;
+                }
+                if (now - a.lastShot > a.shootCd) {
+                    shootAllyBullet(a); a.lastShot = now;
+                    a.shootCd = 700 + Math.random() * 800;
+                }
+            } else {
+                const distToPlayer = Math.hypot(player.x - a.x, player.y - a.y);
+                if (distToPlayer > 150) {
+                    const angleToPlayer = Math.atan2(player.y - a.y, player.x - a.x);
+                    a.x += Math.cos(angleToPlayer) * a.speed * a.speedVar * dtFactor;
+                    a.y += Math.sin(angleToPlayer) * a.speed * a.speedVar * dtFactor;
+                    a.walkCycle += dt * 0.015;
+                    a.angle = angleToPlayer;
+                }
+            }
+            if (a.recoil > 0) a.recoil -= dt * 0.008;
+            if (a.recoil < 0) a.recoil = 0;
+            a.x = Math.max(a.radius, Math.min(GAME_WIDTH - a.radius, a.x));
+            a.y = Math.max(a.radius, Math.min(GAME_HEIGHT - a.radius, a.y));
+        }
+
+        // --- Враги ---
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            if (now > e.retargetCd) {
+                let bestTarget = null;
+                let bestDist = Infinity;
+                const distToPlayer = Math.hypot(player.x - e.x, player.y - e.y);
+                if (distToPlayer < bestDist) {
+                    bestDist = distToPlayer;
+                    bestTarget = { x: player.x, y: player.y, isPlayer: true, ref: player };
+                }
+                for (const a of allies) {
+                    const d = Math.hypot(a.x - e.x, a.y - e.y);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        bestTarget = { x: a.x, y: a.y, isPlayer: false, ref: a };
+                    }
+                }
+                e.target = bestTarget;
+                e.retargetCd = now + 800;
+            }
+
+            if (e.target) {
+                let targetAlive = e.target.isPlayer ? true : allies.includes(e.target.ref);
+                if (!targetAlive) e.target = null;
+                else {
+                    const angle = Math.atan2(e.target.y - e.y, e.target.x - e.x);
+                    e.angle = angle;
+                    const spd = e.speed * e.speedVar * dtFactor;
+                    e.x += Math.cos(angle) * spd;
+                    e.y += Math.sin(angle) * spd;
+                    e.walkCycle += dt * 0.013;
+
+                    if (now - e.lastShot > e.shootCd) {
+                        shootEnemyBullet(e); e.lastShot = now;
+                        e.shootCd = 800 + Math.random() * 1200;
+                    }
+
+                    if (e.target.isPlayer) {
+                        if (Math.hypot(e.x - player.x, e.y - player.y) < e.radius + player.radius) {
+                            if (!player.invulnerable) {
+                                damagePlayer(12);
+                            }
+                            const push = Math.atan2(e.y - player.y, e.x - player.x);
+                            e.x += Math.cos(push) * 30;
+                            e.y += Math.sin(push) * 30;
+                        }
+                    } else {
+                        const allyRef = e.target.ref;
+                        if (allies.includes(allyRef) && Math.hypot(e.x - allyRef.x, e.y - allyRef.y) < e.radius + allyRef.radius) {
+                            allyRef.hp -= 25 * dtFactor;
+                            spawnHitParticles(allyRef.x, allyRef.y, TEAM_COLORS[playerTeam].body, 2);
+                            if (allyRef.hp <= 0) {
+                                const idx = allies.indexOf(allyRef);
+                                if (idx !== -1) { allies.splice(idx, 1); updateHUD(); }
+                            }
+                            const push = Math.atan2(e.y - allyRef.y, e.x - allyRef.x);
+                            e.x += Math.cos(push) * 20;
+                            e.y += Math.sin(push) * 20;
+                        }
+                    }
+                }
+            }
+            if (e.recoil > 0) e.recoil -= dt * 0.008;
+            if (e.recoil < 0) e.recoil = 0;
+        }
+
+        // --- Пули ---
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const b = bullets[i];
+            b.x += b.vx * dtFactor;
+            b.y += b.vy * dtFactor;
+            b.life--;
+
+            if (b.isRocket && b.life % 2 === 0) {
+                particles.push({
+                    x: b.x + (Math.random() - 0.5) * 4,
+                    y: b.y + (Math.random() - 0.5) * 4,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5 - 0.3,
+                    life: 15, maxLife: 15,
+                    color: 'rgba(120,120,120,0.6)',
+                    size: 4 + Math.random() * 3
+                });
+            }
+
+            if (b.life <= 0 || b.x < -60 || b.x > GAME_WIDTH + 60 || b.y < -60 || b.y > GAME_HEIGHT + 60) {
+                if (b.isRocket) spawnHitParticles(b.x, b.y, '#ff8833', 8);
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            let used = false;
+
+            if (!b.fromPlayer && !b.fromAlly) {
+                // Попадание во вражескую пулю в игрока — с учётом МГЕ
+                if (Math.hypot(b.x - player.x, b.y - player.y) < b.radius + player.radius) {
+                    // МГЕ: урон почти нулевой, а для пулемётчика — ноль
+                    if (mgeActive) {
+                        // Пулемётчик — вообще ничего
+                        if (selectedClass === 'heavy') {
+                            // Игнорируем полностью
+                        } else if (!player.invulnerable) {
+                            damagePlayer(b.damage);
+                        }
+                    } else {
+                        if (!player.invulnerable) {
+                            damagePlayer(b.damage);
+                        }
+                    }
+                    spawnHitParticles(b.x, b.y, mgeActive ? '#ffd700' : '#ff4444', 6);
+                    used = true;
+                }
+                if (!used) {
+                    for (let j = allies.length - 1; j >= 0; j--) {
+                        const a = allies[j];
+                        if (Math.hypot(b.x - a.x, b.y - a.y) < b.radius + a.radius) {
+                            a.hp -= b.damage;
+                            spawnHitParticles(b.x, b.y, TEAM_COLORS[playerTeam].body, 4);
+                            if (a.hp <= 0) { allies.splice(j, 1); updateHUD(); }
+                            used = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ((b.fromPlayer || b.fromAlly) && !used) {
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const e = enemies[j];
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+                        e.hp -= b.damage;
+                        spawnBloodParticles(b.x, b.y, TEAM_COLORS[enemyTeam].body);
+                        if (e.hp <= 0) {
+                            enemies.splice(j, 1);
+                            if (b.fromPlayer) {
+                                kills++;
+                                score += 15;
+                                // Проверка активации МГЕ
+                                checkMgeActivation();
+                            } else {
+                                score += 5;
+                            }
+                            updateHUD();
+                        }
+                        if (b.isRocket) spawnHitParticles(b.x, b.y, '#ff8833', 10);
+                        used = true;
+                        break;
+                    }
+                }
+            }
+
+            if (used) bullets.splice(i, 1);
+        }
+
+        // --- Частицы ---
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx * dtFactor;
+            p.y += p.vy * dtFactor;
+            if (p.gravity) p.vy += p.gravity * dtFactor;
+            if (!p.gravity && !p.noFade) { p.vx *= 0.95; p.vy *= 0.95; }
+            p.life -= dtFactor;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        if (mouseDown || fireBtnPressed) shootPlayerBullet();
+        if (bullets.length > 200) bullets = bullets.slice(-200);
+        if (particles.length > 400) particles = particles.slice(-400);
+    }
+
+    function endGame() {
+        gameState = 'gameover';
+        finalScoreSpan.textContent = score;
+        finalKillsSpan.textContent = kills;
+        gameoverOverlay.style.display = 'flex';
+        mgeIndicator.classList.remove('active');
+    }
+
+    // ============================================================
+    // ПРОРИСОВКА ПЕРСОНАЖЕЙ
+    // ============================================================
+    function drawCharacter(x, y, radius, teamColors, classKey, angle, hp, maxHp, isPlayer, isAlly, invuln, walkCycle, recoil) {
+        const cls = CLASSES[classKey];
+        const bodyColor = invuln ? '#ffffff' : teamColors.body;
+        const clothColor = teamColors.cloth;
+        const darkColor = teamColors.accent;
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Свечение МГЕ вокруг игрока
+        if (isPlayer && mgeActive) {
+            const pulse = 1 + Math.sin(performance.now() * 0.01) * 0.15;
+            const grad = ctx.createRadialGradient(0, 0, radius * 0.5, 0, 0, radius * 2.5 * pulse);
+            grad.addColorStop(0, 'rgba(255, 200, 0, 0.6)');
+            grad.addColorStop(0.5, 'rgba(255, 80, 0, 0.25)');
+            grad.addColorStop(1, 'rgba(255, 0, 100, 0)');
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 2.5 * pulse, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Вращающиеся искры
+            for (let i = 0; i < 6; i++) {
+                const a = performance.now() * 0.003 + i * Math.PI / 3;
+                const sparkR = radius * (1.6 + Math.sin(performance.now() * 0.005 + i) * 0.3);
+                ctx.beginPath();
+                ctx.arc(Math.cos(a) * sparkR, Math.sin(a) * sparkR, 4, 0, Math.PI * 2);
+                ctx.fillStyle = ['#ff0044', '#ff8800', '#ffd700'][i % 3];
+                ctx.shadowColor = '#ff8800';
+                ctx.shadowBlur = 15;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // Тень
+        ctx.beginPath();
+        ctx.ellipse(0, radius * 0.9, radius * 0.95, radius * 0.35, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fill();
+
+        // Ноги
+        const legSwing = Math.sin(walkCycle) * radius * 0.3;
+        ctx.fillStyle = darkColor;
+        ctx.beginPath();
+        ctx.ellipse(-radius * 0.35 + legSwing * 0.3, radius * 0.55, radius * 0.22, radius * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(radius * 0.35 - legSwing * 0.3, radius * 0.55, radius * 0.22, radius * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ботинки
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.ellipse(-radius * 0.35 + legSwing * 0.3, radius * 0.85, radius * 0.28, radius * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(radius * 0.35 - legSwing * 0.3, radius * 0.85, radius * 0.28, radius * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Тело
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.fillStyle = bodyColor;
+        ctx.shadowColor = isPlayer && mgeActive ? '#ffd700' : darkColor;
+        ctx.shadowBlur = isPlayer ? (mgeActive ? 30 : 22) : 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Жилетка
+        ctx.beginPath();
+        ctx.arc(0, radius * 0.15, radius * 0.85, Math.PI * 0.15, Math.PI * 0.85);
+        ctx.fillStyle = clothColor;
+        ctx.fill();
+
+        // Пуговицы
+        ctx.fillStyle = '#ffd966';
+        for (let i = -1; i <= 1; i++) {
+            ctx.beginPath();
+            ctx.arc(0, radius * 0.1 + i * radius * 0.2, radius * 0.06, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Обводка
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = isPlayer ? (mgeActive ? '#ffd700' : darkColor) : (isAlly ? 'rgba(255,255,255,0.6)' : darkColor);
+        ctx.lineWidth = isPlayer ? 3 : 2;
+        ctx.stroke();
+
+        // Голова
+        ctx.beginPath();
+        ctx.arc(0, -radius * 0.55, radius * 0.55, 0, Math.PI * 2);
+        ctx.fillStyle = '#e8c39e';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        drawClassHeadgear(classKey, radius, teamColors);
+
+        // Глаза
+        const eyeOffsetX = Math.cos(angle) * radius * 0.1;
+        const eyeOffsetY = Math.sin(angle) * radius * 0.06;
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.18 + eyeOffsetX, -radius * 0.6 + eyeOffsetY, radius * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(radius * 0.18 + eyeOffsetX, -radius * 0.6 + eyeOffsetY, radius * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.18 + eyeOffsetX * 1.5, -radius * 0.6 + eyeOffsetY * 1.5, radius * 0.07, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(radius * 0.18 + eyeOffsetX * 1.5, -radius * 0.6 + eyeOffsetY * 1.5, radius * 0.07, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Оружие
+        drawWeapon(classKey, angle, radius, recoil, teamColors, isPlayer && mgeActive);
+
+        // Руки
+        drawArms(angle, radius, teamColors, classKey, recoil);
+
+        ctx.restore();
+
+        // Иконка класса
+        ctx.font = `${Math.floor(radius*0.7)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText(cls.icon, x, y - radius - 22);
+
+        // HP бар
+        if (!isPlayer && hp !== undefined && maxHp !== undefined && hp < maxHp) {
+            const bw = radius * 2.2, bh = 5;
+            const bx = x - bw/2;
+            const by = y - radius - 14;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(bx, by, bw, bh);
+            const ratio = Math.max(0, hp/maxHp);
+            ctx.fillStyle = ratio > 0.5 ? '#4ade80' : (ratio > 0.25 ? '#facc15' : '#ef4444');
+            ctx.fillRect(bx, by, bw * ratio, bh);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx, by, bw, bh);
+        }
+    }
+
+    function drawClassHeadgear(classKey, radius, teamColors) {
+        const r = radius * 0.55;
+        const hatColor = teamColors.hat;
+        const accent = teamColors.accent;
+
+        if (classKey === 'scout') {
+            ctx.fillStyle = accent;
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.75, r * 0.95, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = accent;
+            ctx.beginPath();
+            ctx.moveTo(-r * 1.1, -radius * 0.65);
+            ctx.lineTo(r * 0.3, -radius * 0.65);
+            ctx.lineTo(r * 0.1, -radius * 0.5);
+            ctx.lineTo(-r * 1.0, -radius * 0.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.arc(-r * 0.9, -radius * 0.6, r * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (classKey === 'soldier') {
+            ctx.fillStyle = hatColor;
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.7, r * 1.1, Math.PI, 0);
+            ctx.fill();
+            ctx.fillRect(-r * 1.1, -radius * 0.7, r * 2.2, r * 0.35);
+            ctx.fillStyle = '#ffd966';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.75, r * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (classKey === 'pyro') {
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.55, r * 0.85, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#6ab';
+            ctx.beginPath();
+            ctx.arc(-r * 0.3, -radius * 0.55, r * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(r * 0.3, -radius * 0.55, r * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#a33';
+            ctx.beginPath();
+            ctx.arc(r * 0.9, -radius * 0.9, r * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (classKey === 'demoman') {
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.75, r * 0.9, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.9, -radius * 0.75);
+            ctx.lineTo(-r * 0.2, -radius * 0.6);
+            ctx.lineTo(-r * 0.9, -radius * 0.5);
+            ctx.closePath();
+            ctx.fill();
+        } else if (classKey === 'heavy') {
+            ctx.fillStyle = hatColor;
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.7, r * 1.15, Math.PI, 0);
+            ctx.fill();
+            ctx.fillRect(-r * 1.15, -radius * 0.7, r * 2.3, r * 0.4);
+            ctx.fillStyle = '#8a7a00';
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.9, -radius * 0.3);
+            ctx.lineTo(-r * 0.4, radius * 0.1);
+            ctx.lineTo(-r * 0.2, radius * 0.05);
+            ctx.lineTo(-r * 0.7, -radius * 0.35);
+            ctx.closePath();
+            ctx.fill();
+        } else if (classKey === 'engineer') {
+            ctx.fillStyle = '#d4a017';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.7, r * 1.05, Math.PI, 0);
+            ctx.fill();
+            ctx.fillRect(-r * 1.05, -radius * 0.7, r * 2.1, r * 0.35);
+            ctx.fillStyle = '#ffdd77';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.9, r * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.arc(-r * 0.3, -radius * 0.55, r * 0.22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(r * 0.3, -radius * 0.55, r * 0.22, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (classKey === 'medic') {
+            ctx.fillStyle = '#eee';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.7, r * 1.0, Math.PI, 0);
+            ctx.fill();
+            ctx.fillRect(-r * 1.0, -radius * 0.7, r * 2.0, r * 0.35);
+            ctx.fillStyle = '#d33';
+            ctx.fillRect(-r * 0.12, -radius * 0.85, r * 0.24, r * 0.5);
+            ctx.fillRect(-r * 0.35, -radius * 0.72, r * 0.7, r * 0.24);
+            ctx.fillStyle = 'rgba(150,200,255,0.7)';
+            ctx.beginPath();
+            ctx.arc(-r * 0.3, -radius * 0.55, r * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(r * 0.3, -radius * 0.55, r * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (classKey === 'sniper') {
+            ctx.fillStyle = '#8b6b3a';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.8, r * 0.85, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = '#6b5028';
+            ctx.beginPath();
+            ctx.ellipse(0, -radius * 0.8, r * 1.4, r * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-r * 0.85, -radius * 0.78, r * 1.7, r * 0.12);
+        } else if (classKey === 'spy') {
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.55, r * 0.9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#e8c39e';
+            ctx.beginPath();
+            ctx.ellipse(0, -radius * 0.45, r * 0.45, r * 0.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(0, -radius * 0.85, r * 0.7, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.ellipse(0, -radius * 0.85, r * 1.15, r * 0.15, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    function drawWeapon(classKey, angle, radius, recoil, teamColors, mgeGlow) {
+        const weapon = CLASSES[classKey].weapon;
+        const recoilOffset = recoil * radius * 0.25;
+        const handleX = radius * 0.55;
+        const handleY = radius * 0.15;
+
+        ctx.save();
+        ctx.translate(handleX, handleY);
+        ctx.rotate(angle);
+        ctx.translate(-recoilOffset, 0);
+
+        if (mgeGlow) {
+            ctx.shadowColor = '#ff00aa';
+            ctx.shadowBlur = 15;
+        }
+
+        if (weapon === 'scattergun') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-2, -4, 8, 12);
+            ctx.fillStyle = '#444';
+            ctx.fillRect(6, -2, radius * 1.2, 5);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(6, -3, radius * 1.2, 2);
+            ctx.fillStyle = '#666';
+            ctx.fillRect(6 + radius * 1.0, -3, 6, 7);
+        } else if (weapon === 'rocket') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-3, -5, 10, 14);
+            ctx.fillStyle = '#5a6a3a';
+            ctx.fillRect(7, -4, radius * 1.4, 8);
+            ctx.fillStyle = '#2a3a1a';
+            ctx.fillRect(7, -4, radius * 0.4, 3);
+            ctx.fillStyle = '#888';
+            ctx.beginPath();
+            ctx.arc(7 + radius * 1.4, 0, 5, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (weapon === 'flamethrower') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-3, -4, 9, 12);
+            ctx.fillStyle = '#666';
+            ctx.fillRect(6, -3, radius * 1.3, 6);
+            ctx.fillStyle = '#a33';
+            ctx.beginPath();
+            ctx.arc(6, 12, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.moveTo(6 + radius * 1.3, -5);
+            ctx.lineTo(6 + radius * 1.5, -8);
+            ctx.lineTo(6 + radius * 1.5, 8);
+            ctx.lineTo(6 + radius * 1.3, 5);
+            ctx.closePath();
+            ctx.fill();
+        } else if (weapon === 'grenade') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-3, -5, 10, 14);
+            ctx.fillStyle = '#444';
+            ctx.fillRect(7, -4, radius * 1.1, 8);
+            ctx.fillStyle = '#666';
+            ctx.beginPath();
+            ctx.arc(12, 5, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#333';
+            for (let i = 0; i < 4; i++) {
+                const a = i * Math.PI / 2;
+                ctx.beginPath();
+                ctx.arc(12 + Math.cos(a) * 3, 5 + Math.sin(a) * 3, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (weapon === 'minigun') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-4, -5, 10, 14);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(6, -6, radius * 0.9, 12);
+            ctx.fillStyle = '#666';
+            for (let i = 0; i < 5; i++) {
+                const yOff = -5 + i * 2.5;
+                ctx.fillRect(6 + radius * 0.9, yOff, radius * 0.7, 2);
+            }
+            ctx.fillStyle = '#222';
+            ctx.fillRect(6 + radius * 1.5, -7, 4, 14);
+        } else if (weapon === 'shotgun') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-2, -4, 8, 12);
+            ctx.fillStyle = '#555';
+            ctx.fillRect(6, -3, radius * 1.1, 6);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(6, -3, radius * 1.1, 2);
+        } else if (weapon === 'syringe') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-3, -4, 9, 12);
+            ctx.fillStyle = '#ddd';
+            ctx.fillRect(6, -3, radius * 0.9, 6);
+            ctx.fillStyle = '#4a90d9';
+            ctx.fillRect(6 + radius * 0.9, -2, radius * 0.7, 4);
+            ctx.fillStyle = '#888';
+            ctx.fillRect(6 + radius * 1.5, -0.5, 6, 1);
+        } else if (weapon === 'sniper') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-3, -5, 10, 14);
+            ctx.fillStyle = '#444';
+            ctx.fillRect(7, -3, radius * 1.8, 5);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(10, -8, radius * 0.7, 4);
+            ctx.fillStyle = '#6ab';
+            ctx.beginPath();
+            ctx.arc(10 + radius * 0.35, -6, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#333';
+            ctx.fillRect(7 + radius * 1.8, -2, 5, 4);
+        } else if (weapon === 'revolver') {
+            ctx.fillStyle = '#3a2a18';
+            ctx.fillRect(-2, -3, 7, 10);
+            ctx.fillStyle = '#555';
+            ctx.beginPath();
+            ctx.arc(8, 2, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#444';
+            ctx.fillRect(10, -2, radius * 0.8, 4);
+        }
+
+        ctx.restore();
+    }
+
+    function drawArms(angle, radius, teamColors, classKey, recoil) {
+        const skinColor = '#e8c39e';
+        const sleeveColor = teamColors.body;
+        const recoilOffset = recoil * radius * 0.15;
+
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.fillStyle = sleeveColor;
+        ctx.beginPath();
+        ctx.ellipse(radius * 0.7 - recoilOffset, radius * 0.35, radius * 0.4, radius * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = skinColor;
+        ctx.beginPath();
+        ctx.arc(radius * 1.05 - recoilOffset, radius * 0.35, radius * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = sleeveColor;
+        ctx.beginPath();
+        ctx.ellipse(radius * 0.5 - recoilOffset, -radius * 0.35, radius * 0.4, radius * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = skinColor;
+        ctx.beginPath();
+        ctx.arc(radius * 0.85 - recoilOffset, -radius * 0.35, radius * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // ============================================================
+    // ОТРИСОВКА
+    // ============================================================
+    function draw() {
+        ctx.fillStyle = '#4a6a4a';
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+        // Затемнение + эффект при МГЕ
+        if (mgeActive) {
+            const t = performance.now() * 0.002;
+            const flashAlpha = 0.08 + Math.sin(t) * 0.04;
+            ctx.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        }
+
+        // Сетка
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+        ctx.lineWidth = 1;
+        const gs = 50;
+        for (let x = 0; x < GAME_WIDTH; x += gs) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GAME_HEIGHT); ctx.stroke();
+        }
+        for (let y = 0; y < GAME_HEIGHT; y += gs) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GAME_WIDTH, y); ctx.stroke();
+        }
+
+        // Базы
+        ctx.fillStyle = TEAM_COLORS[playerTeam].body + '20';
+        ctx.fillRect(0, 0, 130, 130);
+        ctx.fillStyle = TEAM_COLORS[enemyTeam].body + '20';
+        ctx.fillRect(GAME_WIDTH - 130, GAME_HEIGHT - 130, 130, 130);
+
+        // Частицы
+        for (const p of particles) {
+            const alpha = p.noFade ? 1 : Math.max(0, p.life / p.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * (p.noFade ? 1 : alpha), 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Пули
+        for (const b of bullets) {
+            if (b.tracer) {
+                ctx.beginPath();
+                ctx.moveTo(b.x, b.y);
+                const len = b.tracerLong ? 30 : 15;
+                ctx.lineTo(b.x - b.vx * len / 8, b.y - b.vy * len / 8);
+                ctx.strokeStyle = b.color;
+                ctx.lineWidth = b.radius;
+                ctx.globalAlpha = 0.85;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+            ctx.fillStyle = b.color;
+            ctx.shadowColor = b.color;
+            ctx.shadowBlur = b.isFire ? 15 : 8;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // Союзники
+        for (const a of allies) {
+            drawCharacter(a.x, a.y, a.radius, TEAM_COLORS[playerTeam], a.classKey,
+                          a.angle, a.hp, a.maxHp, false, true, false, a.walkCycle, a.recoil);
+        }
+
+        // Враги
+        for (const e of enemies) {
+            drawCharacter(e.x, e.y, e.radius, TEAM_COLORS[enemyTeam], e.classKey,
+                          e.angle, e.hp, e.maxHp, false, false, false, e.walkCycle, e.recoil);
+        }
+
+        // Игрок
+        drawCharacter(player.x, player.y, player.radius, TEAM_COLORS[playerTeam], selectedClass,
+                      player.angle, playerHealth, maxHealth, true, false, player.invulnerable,
+                      player.walkCycle, player.recoil);
+
+        // Прицел
+        let crossX, crossY;
+        if (aimJoyActive) {
+            crossX = player.x + Math.cos(aimJoyAngle) * 200;
+            crossY = player.y + Math.sin(aimJoyAngle) * 200;
+        } else if (!isTouchDevice) {
+            crossX = aimX; crossY = aimY;
+        } else {
+            crossX = player.x + Math.cos(player.angle) * 200;
+            crossY = player.y + Math.sin(player.angle) * 200;
+        }
+
+        ctx.beginPath();
+        ctx.arc(crossX, crossY, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = mgeActive ? '#ffd700' : 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(crossX, crossY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = mgeActive ? '#ffd700' : 'white';
+        ctx.fill();
+    }
+
+    function gameLoop(timestamp) {
+        if (!lastTimestamp) lastTimestamp = timestamp;
+        const dt = Math.min(50, timestamp - lastTimestamp);
+        lastTimestamp = timestamp;
+        if (gameState === 'playing') update(dt);
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // ============================================================
+    // УПРАВЛЕНИЕ
+    // ============================================================
+    window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'w' || k === 'ц') keys.w = true;
+        if (k === 'a' || k === 'ф') keys.a = true;
+        if (k === 's' || k === 'ы') keys.s = true;
+        if (k === 'd' || k === 'в') keys.d = true;
+        if (e.key === 'ArrowUp') keys.up = true;
+        if (e.key === 'ArrowDown') keys.down = true;
+        if (e.key === 'ArrowLeft') keys.left = true;
+        if (e.key === 'ArrowRight') keys.right = true;
+        if (e.key === ' ' || e.key === 'Space') {
+            e.preventDefault();
+            if (gameState === 'playing') shootPlayerBullet();
+        }
+    });
+    window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'w' || k === 'ц') keys.w = false;
+        if (k === 'a' || k === 'ф') keys.a = false;
+        if (k === 's' || k === 'ы') keys.s = false;
+        if (k === 'd' || k === 'в') keys.d = false;
+        if (e.key === 'ArrowUp') keys.up = false;
+        if (e.key === 'ArrowDown') keys.down = false;
+        if (e.key === 'ArrowLeft') keys.left = false;
+        if (e.key === 'ArrowRight') keys.right = false;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+        mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+        aimX = mouseX; aimY = mouseY;
+    });
+    canvas.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        mouseDown = true;
+        if (gameState === 'playing') shootPlayerBullet();
+    });
+    window.addEventListener('mouseup', () => { mouseDown = false; });
+    canvas.addEventListener('mouseleave', () => { mouseDown = false; });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    moveJoystick.addEventListener('touchstart', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const rect = moveJoystick.getBoundingClientRect();
+        const touch = e.touches[0];
+        moveJoyStartX = rect.left + rect.width / 2;
+        moveJoyStartY = rect.top + rect.height / 2;
+        moveJoyActive = true;
+        updateMoveJoystick(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!moveJoyActive) return;
+        e.preventDefault();
+        for (let i = 0; i < e.touches.length; i++) {
+            const t = e.touches[i];
+            const dx = t.clientX - moveJoyStartX;
+            const dy = t.clientY - moveJoyStartY;
+            if (Math.hypot(dx, dy) < 120) { updateMoveJoystick(t.clientX, t.clientY); break; }
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchend', (e) => {
+        if (moveJoyActive) {
+            let stillOn = false;
+            for (let i = 0; i < e.touches.length; i++) {
+                const t = e.touches[i];
+                if (Math.hypot(t.clientX - moveJoyStartX, t.clientY - moveJoyStartY) < 120) { stillOn = true; break; }
+            }
+            if (!stillOn) {
+                moveJoyActive = false;
+                moveJoyVecX = 0; moveJoyVecY = 0;
+                moveKnob.style.transform = 'translate(-50%, -50%)';
+            }
+        }
+    });
+    document.addEventListener('touchcancel', () => {
+        moveJoyActive = false; moveJoyVecX = 0; moveJoyVecY = 0;
+        moveKnob.style.transform = 'translate(-50%, -50%)';
+    });
+
+    function updateMoveJoystick(cx, cy) {
+        let dx = cx - moveJoyStartX;
+        let dy = cy - moveJoyStartY;
+        const dist = Math.hypot(dx, dy);
+        const maxR = MOVE_JOY_RADIUS;
+        if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
+        moveJoyVecX = dx / maxR;
+        moveJoyVecY = dy / maxR;
+        moveKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    }
+
+    aimJoystick.addEventListener('touchstart', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const rect = aimJoystick.getBoundingClientRect();
+        const touch = e.touches[0];
+        aimJoyStartX = rect.left + rect.width / 2;
+        aimJoyStartY = rect.top + rect.height / 2;
+        aimJoyActive = true;
+        updateAimJoystick(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!aimJoyActive) return;
+        e.preventDefault();
+        for (let i = 0; i < e.touches.length; i++) {
+            const t = e.touches[i];
+            const dx = t.clientX - aimJoyStartX;
+            const dy = t.clientY - aimJoyStartY;
+            if (Math.hypot(dx, dy) < 120) { updateAimJoystick(t.clientX, t.clientY); break; }
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchend', (e) => {
+        if (aimJoyActive) {
+            let stillOn = false;
+            for (let i = 0; i < e.touches.length; i++) {
+                const t = e.touches[i];
+                if (Math.hypot(t.clientX - aimJoyStartX, t.clientY - aimJoyStartY) < 120) { stillOn = true; break; }
+            }
+            if (!stillOn) {
+                aimJoyActive = false;
+                aimKnob.style.transform = 'translate(-50%, -50%)';
+            }
+        }
+    });
+    document.addEventListener('touchcancel', () => {
+        aimJoyActive = false;
+        aimKnob.style.transform = 'translate(-50%, -50%)';
+    });
+
+    function updateAimJoystick(cx, cy) {
+        let dx = cx - aimJoyStartX;
+        let dy = cy - aimJoyStartY;
+        const dist = Math.hypot(dx, dy);
+        const maxR = AIM_JOY_RADIUS;
+        if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
+        aimJoyVecX = dx / maxR;
+        aimJoyVecY = dy / maxR;
+        aimJoyAngle = Math.atan2(aimJoyVecY, aimJoyVecX);
+        aimKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    }
+
+    fireBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        fireBtnPressed = true;
+        if (gameState === 'playing') shootPlayerBullet();
+    }, { passive: false });
+    fireBtn.addEventListener('touchend', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        fireBtnPressed = false;
+    });
+    fireBtn.addEventListener('touchcancel', () => { fireBtnPressed = false; });
+    fireBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        fireBtnPressed = true;
+        if (gameState === 'playing') shootPlayerBullet();
+    });
+    fireBtn.addEventListener('mouseup', () => { fireBtnPressed = false; });
+    fireBtn.addEventListener('mouseleave', () => { fireBtnPressed = false; });
+
+    buildClassButtons();
+    resizeCanvas();
+    aimX = GAME_WIDTH / 2; aimY = GAME_HEIGHT / 2;
+    requestAnimationFrame(gameLoop);
+    setTimeout(resizeCanvas, 100);
+})();
+</script>
+</body>
+  </html>
