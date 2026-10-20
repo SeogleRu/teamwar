@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Team War - TF2 в браузере</title>
+<title>Team War - браузерная стрелялка</title>
 <style>
     * {
         margin: 0; padding: 0; box-sizing: border-box;
@@ -266,7 +266,7 @@
             <div class="kills">💀 <span id="killsValue">0</span></div>
             <div class="ally-count">🤝 <span id="allyValue">0</span></div>
         </div>
-        <div class="team-tag" id="teamTag">BLU</div>
+        <div class="team-tag" id="teamTag">СИНИЙ</div>
         <div class="hud-right">
             <div class="ammo">🔫 <span id="ammoValue">∞</span></div>
             <div class="score">🎯 <span id="scoreValue">0</span></div>
@@ -291,18 +291,19 @@
 
     <div id="menu-overlay">
         <h1>TEAM WAR</h1>
-        <div class="subtitle">TEAM FORTRESS 2 В БРАУЗЕРЕ</div>
+        <div class="subtitle">БРАУЗЕРНАЯ ИГРА<br>
+        Игра не связана с Valve и Team Fortress 2, все совпадения случайны</div>
 
         <div class="menu-section">
             <h2>Команда</h2>
             <div class="team-row">
-                <button class="team-btn red" data-team="RED">🔴 RED</button>
-                <button class="team-btn blu selected" data-team="BLU">🔵 BLU</button>
+                <button class="team-btn red" data-team="RED">🔴 КРАСНЫЙ</button>
+                <button class="team-btn blu selected" data-team="BLU">🔵 СИНИЙ</button>
             </div>
         </div>
 
         <div class="menu-section">
-            <h2>Класс (9) — МГЕ недоступен для разведчика</h2>
+            <h2>Класс (9) — МГЕ недоступен для малыша</h2>
             <div class="class-row" id="classRow"></div>
         </div>
 
@@ -356,15 +357,15 @@
     const MGE_DAMAGE_REDUCTION = 0.05; // почти неуязвим (5% урона проходит)
 
     const CLASSES = {
-        scout:    { name:'Разведчик',   icon:'🏃', speed:3.8, maxHealth:95,  damage:18, fireCooldown:140, bulletSpeed:10, bulletSize:4, radius:19, bulletsPerShot:1, spread:0.06,  stats:'Быстрый · Слабый', weapon:'scattergun' },
-        soldier:  { name:'Солдат',      icon:'🚀', speed:2.5, maxHealth:145, damage:30, fireCooldown:380, bulletSpeed:7,  bulletSize:7, radius:23, bulletsPerShot:1, spread:0.04,  stats:'Урон+ · Ракеты', weapon:'rocket' },
-        pyro:     { name:'Поджигатель', icon:'🔥', speed:2.9, maxHealth:130, damage:9,  fireCooldown:60,  bulletSpeed:6,  bulletSize:8, radius:22, bulletsPerShot:2, spread:0.22,  stats:'Огонь · Дым', weapon:'flamethrower' },
-        demoman:  { name:'Подрывник',   icon:'💣', speed:2.7, maxHealth:140, damage:24, fireCooldown:320, bulletSpeed:6.5,bulletSize:8, radius:23, bulletsPerShot:1, spread:0.08,  stats:'Взрывы · Ловушки', weapon:'grenade' },
-        heavy:    { name:'Пулемётчик',  icon:'🛡️', speed:1.8, maxHealth:200, damage:14, fireCooldown:100, bulletSpeed:8.5,bulletSize:5, radius:28, bulletsPerShot:1, spread:0.10,  stats:'Танк · Урон', weapon:'minigun' },
-        engineer: { name:'Инженер',     icon:'🔧', speed:2.6, maxHealth:125, damage:16, fireCooldown:200, bulletSpeed:8,  bulletSize:5, radius:21, bulletsPerShot:2, spread:0.12,  stats:'Турели · Ящики', weapon:'shotgun' },
-        medic:    { name:'Медик',       icon:'💉', speed:3.0, maxHealth:110, damage:12, fireCooldown:200, bulletSpeed:9,  bulletSize:4, radius:20, bulletsPerShot:1, spread:0.05,  stats:'Лечение · Ускорение', weapon:'syringe' },
-        sniper:   { name:'Снайпер',     icon:'🎯', speed:2.6, maxHealth:100, damage:70, fireCooldown:900, bulletSpeed:14, bulletSize:5, radius:20, bulletsPerShot:1, spread:0.005, stats:'Дальний · Точный', weapon:'sniper' },
-        spy:      { name:'Шпион',       icon:'🕵️', speed:3.4, maxHealth:105, damage:45, fireCooldown:320, bulletSpeed:10, bulletSize:4, radius:20, bulletsPerShot:1, spread:0.02,  stats:'Стелс · Засады', weapon:'revolver' }
+        scout:    { name:'Малыш',   icon:'🏃', speed:3.8, maxHealth:95,  damage:18, fireCooldown:140, bulletSpeed:10, bulletSize:4, radius:19, bulletsPerShot:1, spread:0.06,  stats:'Быстрый · Слабый', weapon:'scattergun' },
+        soldier:  { name:'Патриот',      icon:'🚀', speed:2.5, maxHealth:145, damage:30, fireCooldown:380, bulletSpeed:7,  bulletSize:7, radius:23, bulletsPerShot:1, spread:0.04,  stats:'Урон+ · Ракеты', weapon:'rocket' },
+        pyro:     { name:'Огнеметчик', icon:'🔥', speed:2.9, maxHealth:130, damage:9,  fireCooldown:60,  bulletSpeed:6,  bulletSize:8, radius:22, bulletsPerShot:2, spread:0.22,  stats:'Огонь · Дым', weapon:'flamethrower' },
+        demoman:  { name:'Взрыватель',   icon:'💣', speed:2.7, maxHealth:140, damage:24, fireCooldown:320, bulletSpeed:6.5,bulletSize:8, radius:23, bulletsPerShot:1, spread:0.08,  stats:'Взрывы · Ловушки', weapon:'grenade' },
+        heavy:    { name:'Танк',  icon:'🛡️', speed:1.8, maxHealth:200, damage:14, fireCooldown:100, bulletSpeed:8.5,bulletSize:5, radius:28, bulletsPerShot:1, spread:0.10,  stats:'Танк · Урон', weapon:'minigun' },
+        engineer: { name:'Механик',     icon:'🔧', speed:2.6, maxHealth:125, damage:16, fireCooldown:200, bulletSpeed:8,  bulletSize:5, radius:21, bulletsPerShot:2, spread:0.12,  stats:'Турели · Ящики', weapon:'shotgun' },
+        medic:    { name:'Врач',       icon:'💉', speed:3.0, maxHealth:110, damage:12, fireCooldown:200, bulletSpeed:9,  bulletSize:4, radius:20, bulletsPerShot:1, spread:0.05,  stats:'Лечение · Ускорение', weapon:'syringe' },
+        sniper:   { name:'Ворошиловский стрелок',     icon:'🎯', speed:2.6, maxHealth:100, damage:70, fireCooldown:900, bulletSpeed:14, bulletSize:5, radius:20, bulletsPerShot:1, spread:0.005, stats:'Дальний · Точный', weapon:'sniper' },
+        spy:      { name:'Скрытный',       icon:'🕵️', speed:3.4, maxHealth:105, damage:45, fireCooldown:320, bulletSpeed:10, bulletSize:4, radius:20, bulletsPerShot:1, spread:0.02,  stats:'Стелс · Засады', weapon:'revolver' }
     };
 
     let selectedTeam = 'BLU';
